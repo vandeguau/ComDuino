@@ -1,7 +1,5 @@
 # COMDUINO - Arduino Serial Data Acquisition and Visualization Tool
 
-## Description:
-
 COMDUINO is a Python-based application designed to interact with an Arduino board via serial communication. The primary function of this program is to facilitate:
 
 ## Data Acquisition: 
