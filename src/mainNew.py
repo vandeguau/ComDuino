@@ -11,6 +11,8 @@ import sys
 
 # Inicializa el puerto serie
 ser = None
+enviar_flag = False  # Bandera para controlar el envío de datos
+
 
 def obtener_puertos_com():
     return [port.device for port in list_ports.comports()]
@@ -29,7 +31,6 @@ def abrir_puerto_serie(puerto_com, baudios):
     estado_conexion_var.set("Conectado")
 
 
-
 # Agrega una función para crear y escribir en el archivo CSV
 def escribir_csv(nombre_archivo, encabezados, datos):
     with open(nombre_archivo, 'w', newline='') as csvfile:
@@ -39,6 +40,7 @@ def escribir_csv(nombre_archivo, encabezados, datos):
 
 # Función para iniciar la adquisición de datos en un hilo separado
 def iniciar_adquisicion():
+    global enviar_flag
     # Obtiene los valores seleccionados por el usuario
     puerto_com = puerto_com_var.get()
     valor_medido = valor_medido_var.get()
@@ -68,12 +70,27 @@ def iniciar_adquisicion():
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerow([tiempo, valor])
 
-            setpoint_actual = float(setpoint_entry.get())
-            if setpoint_actual != setpoint_anterior:
-                setpoint_anterior = setpoint_actual
-                ax.plot(tiempo_data, [setpoint_actual] * len(tiempo_data), 'y--', label='Setpoint')
-                ax.legend()
+            if enviar_flag ==True:
+                enviar_setpoint_ganancia()
+                # Actualiza los datos del setpoint y vuelve a trazar la línea del setpoint en la gráfica
+                # Actualiza los datos del setpoint y vuelve a trazar la línea del setpoint en la gráfica
+                setpoint_actual = float(setpoint_entry.get())
+                setpoint = float(setpoint_entry.get()) 
+
+                # Modifica los datos del setpoint en la gráfica
+                if 'setpoint_line' in locals():
+                    # Si la línea del setpoint ya existe, actualiza sus datos
+                    setpoint_line.set_ydata([setpoint_actual] * len(tiempo_data))
+                else:
+                    # Si la línea del setpoint no existe, créala y agréguela a la gráfica
+                    setpoint_line, = ax.plot(tiempo_data, [setpoint_actual] * len(tiempo_data), 'y--', label='Setpoint')
+                    ax.legend()
+                print(f"Nuevo setpoint: {setpoint_actual}") 
                 canvas.draw()
+
+
+                enviar_flag = False  # Vuelve a False después de enviar los datos
+                
 
 
             # Actualiza la gráfica
@@ -135,24 +152,21 @@ def on_cerrar_ventana():
     root.destroy()  # Cierra la ventana y termina la aplicación
     sys.exit()
 
-def enviar_datos_arduino(setpoint, kp,ti):
-    if ser and ser.is_open:
-        data_to_send = f"{setpoint},{kp},{ti}\n"  # Formato: setpoint,ganancia
-        ser.write(data_to_send.encode())
-
-
 def actualizar_temperatura(temperatura):
     temperatura_actual_var.set(temperatura)
 
 # Agregar una función para enviar setpoint y ganancia al Arduino
 def enviar_setpoint_ganancia():
     setpoint = setpoint_entry.get()
-    
     kp= kp_entry.get()
     ti= ti_entry.get()
-    enviar_datos_arduino(setpoint,kp,ti)
+    if ser and ser.is_open:
+        data_to_send = f"{setpoint},{kp},{ti}\n"  # Formato: setpoint,ganancia
+        ser.write(data_to_send.encode())
 
-
+def estado_envio(estado):
+    global enviar_flag
+    enviar_flag = estado
 
 # Crea la ventana de la interfaz de usuario
 root = tk.Tk()
@@ -167,6 +181,10 @@ puertos_com = obtener_puertos_com()
 puerto_com_var = tk.StringVar()
 vel_comunicacion_var = tk.StringVar(value="9600")
 valor_medido_var = tk.StringVar()
+
+sp_var = tk.StringVar(value="10")
+kp_var = tk.StringVar(value="-397.16 ")
+ti_var = tk.StringVar(value="-4.43")
 
 # Etiqueta y lista desplegable para seleccionar el puerto COM
 puerto_com_label = ttk.Label(root, text='Puerto COM:')
@@ -213,16 +231,16 @@ valor_medido_entry.grid(row=3, column=1, padx=10, pady=10)
 
 # Dentro de la sección donde se define la interfaz gráfica
 setpoint_label = ttk.Label(root, text='Setpoint:')
-setpoint_entry = ttk.Entry(root)
+setpoint_entry = ttk.Entry(root,textvariable=sp_var)
 setpoint_label.grid(row=4, column=0, padx=10, pady=10)
 setpoint_entry.grid(row=4, column=1, padx=10, pady=10)
 
 kp_label = ttk.Label(root, text='KP:')
-kp_entry = ttk.Entry(root)
+kp_entry = ttk.Entry(root, textvariable=kp_var)
 kp_label.grid(row=5, column=0, padx=10, pady=10)
 kp_entry.grid(row=5, column=1, padx=10, pady=10)
 ti_label = ttk.Label(root, text='TI:')
-ti_entry = ttk.Entry(root)
+ti_entry = ttk.Entry(root, textvariable=ti_var)
 ti_label.grid(row=6, column=0, padx=10, pady=10)
 ti_entry.grid(row=6, column=1, padx=10, pady=10)
 
@@ -233,7 +251,7 @@ temperatura_actual_label.grid(row=7, column=0, padx=10, pady=10)
 temperatura_actual_display.grid(row=7, column=1, padx=10, pady=10)
 
 # En la sección donde se definen los botones y la lógica de la interfaz
-enviar_button = ttk.Button(root, text='Enviar Setpoint y Ganancia', command=enviar_setpoint_ganancia)
+enviar_button = ttk.Button(root, text='Enviar Setpoint y Ganancia', command=lambda: estado_envio(True))
 enviar_button.grid(row=8, column=0, columnspan=2, padx=10, pady=10)
 
 reiniciar_button.grid(row=8, column=1,  columnspan=2,padx=10, pady=10)
